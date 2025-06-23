@@ -23,113 +23,152 @@ class NotesPage extends StatefulWidget {
 }
 
 class _NotesPageState extends State<NotesPage> {
-  List<String> _notes = [];
+  final List<Note> _notes = [];
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _contentController = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    _loadNotes();
-  }
+  int _noteIdCounter = 0;
 
-  void _loadNotes() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _notes = prefs.getStringList('notes') ?? [];
-    });
-  }
-
-  void _saveNotes() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('notes', _notes);
-  }
-
-  void _addNote() async {
-    final newNote = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => NoteEditor()),
-    );
-
-    if (newNote != null) {
+  void _addNote() {
+    if (_titleController.text.isNotEmpty && _contentController.text.isNotEmpty) {
       setState(() {
-        _notes.add(newNote);
-        _saveNotes();
+        _notes.add(
+          Note(
+            id: _noteIdCounter++,
+            title: _titleController.text,
+            content: _contentController.text,
+          ),
+        );
+        _titleController.clear();
+        _contentController.clear();
       });
+      Navigator.of(context).pop();
     }
   }
 
-  void _editNote(int index) async {
-    final editedNote = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => NoteEditor(note: _notes[index])),
+  void _showAddNoteDialog() {
+    _titleController.clear();
+    _contentController.clear();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Add Note'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _titleController,
+              decoration: InputDecoration(labelText: 'Title'),
+            ),
+            TextField(
+              controller: _contentController,
+              decoration: InputDecoration(labelText: 'Content'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: _addNote,
+            child: Text('Save'),
+          ),
+        ],
+      ),
     );
-
-    if (editedNote != null) {
-      setState(() {
-        _notes[index] = editedNote;
-        _saveNotes();
-      });
-    }
   }
 
-  void _deleteNote(int index) {
-    setState(() {
-      _notes.removeAt(index);
-      _saveNotes();
-    });
+  void _showRenameDialog(Note note) {
+    final TextEditingController _renameController = TextEditingController(text: note.title);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Rename Note'),
+        content: TextField(
+          controller: _renameController,
+          decoration: InputDecoration(labelText: 'New Title'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                note.rename(_renameController.text);
+              });
+              Navigator.of(context).pop();
+            },
+            child: Text('Rename'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Notes App'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.search),
-            onPressed: () {
-              // Show search bar or navigate to search page
-            },
-          ),
-        ],
-      ),
-      drawer: Drawer(
-        child: ListView(
-          children: [
-            DrawerHeader(child: Text('My Notes')),
-            ListTile(
-              leading: Icon(Icons.note),
-              title: Text('All Notes'),
-              onTap: () {
-                // Show all notes
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.star),
-              title: Text('Favorites'),
-              onTap: () {
-                // Show favorite notes
-              },
-            ),
-            // Add more options if needed
-          ],
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(
+          title: Text('Notes App'),
         ),
-      ),
-      body: _notes.isEmpty
-          ? Center(child: Text('No notes yet. Tap + to add one.'))
-          : ListView.builder(
-              itemCount: _notes.length,
-              itemBuilder: (_, index) => ListTile(
-                title: Text(_notes[index]),
-                onTap: () => _editNote(index),
-                trailing: IconButton(
-                  icon: Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => _deleteNote(index),
-                ),
+        drawer: Drawer(
+          child: ListView(
+            children: [
+              DrawerHeader(child: Text('My Notes')),
+              ListTile(
+                leading: Icon(Icons.note),
+                title: Text('All Notes'),
+                onTap: () {},
               ),
-            ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addNote,
-        child: Icon(Icons.add),
+              ListTile(
+                leading: Icon(Icons.star),
+                title: Text('Favorites'),
+                onTap: () {},
+              ),
+            ],
+          ),
+        ),
+        body: _notes.isEmpty
+            ? Center(child: Text('No notes yet. Tap + to add one.'))
+            : ListView.builder(
+                itemCount: _notes.length,
+                itemBuilder: (context, index) {
+                  final note = _notes[index];
+                  return ListTile(
+                    title: Text(note.title),
+                    subtitle: Text(note.content),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            note.isFavorite ? Icons.star : Icons.star_border,
+                            color: note.isFavorite ? Colors.amber : null,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              note.isFavorite = !note.isFavorite;
+                            });
+                          },
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.edit),
+                          onPressed: () => _showRenameDialog(note),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: _showAddNoteDialog,
+          child: Icon(Icons.add),
+        ),
       ),
     );
   }
@@ -191,5 +230,23 @@ class _NoteEditorState extends State<NoteEditor> {
         ),
       ),
     );
+  }
+}
+
+class Note {
+  final int id;
+  String title;
+  String content;
+  bool isFavorite;
+
+  Note({
+    required this.id,
+    required this.title,
+    required this.content,
+    this.isFavorite = false,
+  });
+
+  void rename(String newTitle) {
+    title = newTitle;
   }
 }
